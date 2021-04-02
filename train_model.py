@@ -8,6 +8,9 @@ from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
+from taco_loader import *
+from data_loader import *
+
 
 def random_crop(input):
     # TODO: randomly crop the image

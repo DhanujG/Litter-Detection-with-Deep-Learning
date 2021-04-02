@@ -1,250 +1,184 @@
-"""
-
-Author: Pedro F. Proenza
-
-"""
 
 import os
+import sys
+import itertools
+import math
+import logging
 import json
+import re
+import random
+from collections import OrderedDict
 import numpy as np
-import copy
-import utils
-
-from PIL import Image, ExifTags
-
-from pycocotools.coco import COCO
-
-class Taco(utils.Dataset):
-
-    def load_taco(self, dataset_dir, round, subset, class_ids=None,
-                  class_map=None, return_taco=False, auto_download=False):
-        """Load a subset of the TACO dataset.
-        dataset_dir: The root directory of the TACO dataset.
-        round: split number
-        subset: which subset to load (train, val, test)
-        class_ids: If provided, only loads images that have the given classes.
-        class_map: Dictionary used to assign original classes to new class system
-        return_coco: If True, returns the COCO object.
-        auto_download: Automatically download and unzip MS-COCO images and annotations
-        """
-
-        # TODO: Once we got the server running
-        # if auto_download is True:
-        #     self.auto_download(dataset_dir, subset, year)
-        ann_filepath = os.path.join(dataset_dir , 'annotations')
-        if round != None:
-            ann_filepath += "_" + str(round) + "_" + subset + ".json"
-        else:
-            ann_filepath += ".json"
-
-        assert os.path.isfile(ann_filepath)
-
-        # Load dataset
-        dataset = json.load(open(ann_filepath, 'r'))
-
-        # Replace dataset original classes before calling the coco Constructor
-        # Some classes may be assigned background to remove them from the dataset
-        self.replace_dataset_classes(dataset, class_map)
-
-        taco_alla_coco = COCO()
-        taco_alla_coco.dataset = dataset
-        taco_alla_coco.createIndex()
-
-        # Add images and classes except Background
-        # Definitely not the most efficient way
-        image_ids = []
-        background_id = -1
-        class_ids = sorted(taco_alla_coco.getCatIds())
-        for i in class_ids:
-            class_name = taco_alla_coco.loadCats(i)[0]["name"]
-            if class_name != 'Background':
-                self.add_class("taco", i, class_name)
-                image_ids.extend(list(taco_alla_coco.getImgIds(catIds=i)))
-            else:
-                background_id = i
-        image_ids = list(set(image_ids))
-
-        if background_id > -1:
-            class_ids.remove(background_id)
-
-        print('Number of images used:', len(image_ids))
-
-        # Add images
-        for i in image_ids:
-            self.add_image(
-                "taco", image_id=i,
-                path=os.path.join(dataset_dir, taco_alla_coco.imgs[i]['file_name']),
-                width=taco_alla_coco.imgs[i]["width"],
-                height=taco_alla_coco.imgs[i]["height"],
-                annotations=taco_alla_coco.loadAnns(taco_alla_coco.getAnnIds(
-                    imgIds=[i], catIds=class_ids, iscrowd=None)))
-        if return_taco:
-            return taco_alla_coco
-
-    def add_transplanted_dataset(self, dataset_dir, class_map = None):
-
-        # Load dataset
-        ann_filepath = os.path.join(dataset_dir, 'annotations.json')
-        dataset = json.load(open(ann_filepath, 'r'))
-
-        # Map dataset classes
-        self.replace_dataset_classes(dataset, class_map)
-
-        taco_alla_coco = COCO()
-        taco_alla_coco.dataset = dataset
-        taco_alla_coco.createIndex()
-
-        class_ids = sorted(taco_alla_coco.getCatIds())
-
-        # Select images by class
-        # Add images
-        image_ids = []
-        background_id = -1
-        for i in class_ids:
-            class_name = taco_alla_coco.loadCats(i)[0]["name"]
-            if class_name != 'Background':
-                image_ids.extend(list(taco_alla_coco.getImgIds(catIds=i)))
-                # TODO: Select how many
-            else:
-                background_id = i
-        image_ids = list(set(image_ids))
-
-        if background_id > -1:
-            class_ids.remove(background_id)
-
-        # Retrieve list of training image ids
-        train_image_ids = [x['id'] for x in self.image_info]
-
-        nr_train_images_so_far = len(train_image_ids)
-
-        # Add images
-        transplant_counter = 0
-        for i in image_ids:
-            if taco_alla_coco.imgs[i]['source_id'] in train_image_ids:
-                transplant_counter += 1
-                self.add_image(
-                    "taco", image_id=i+nr_train_images_so_far,
-                    path=os.path.join(dataset_dir, taco_alla_coco.imgs[i]['file_name']),
-                    width=taco_alla_coco.imgs[i]["width"],
-                    height=taco_alla_coco.imgs[i]["height"],
-                    annotations=taco_alla_coco.loadAnns(taco_alla_coco.getAnnIds(
-                        imgIds=[i], catIds=class_ids, iscrowd=None)))
-
-        print('Number of transplanted images added: ', transplant_counter, '/', len(image_ids))
-
-    def load_image(self, image_id):
-        """Load the specified image and return as a [H,W,3] Numpy array."""
-
-        # Load image. TODO: do this with opencv to avoid need to correct orientation
-        image = Image.open(self.image_info[image_id]['path'])
-        img_shape = np.shape(image)
-
-        # load metadata
-        exif = image._getexif()
-        if exif:
-            exif = dict(exif.items())
-            # Rotate portrait images if necessary (274 is the orientation tag code)
-            if 274 in exif:
-                if exif[274] == 3:
-                    image = image.rotate(180, expand=True)
-                if exif[274] == 6:
-                    image = image.rotate(270, expand=True)
-                if exif[274] == 8:
-                    image = image.rotate(90, expand=True)
-
-        # If has an alpha channel, remove it for consistency
-        if img_shape[-1] == 4:
-            image = image[..., :3]
-
-        return np.array(image)
-
-    def auto_download(self, dataDir, dataType, dataYear):
-        """TODO: Download the TACO dataset/annotations if requested."""
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import matplotlib.lines as lines
+from matplotlib.patches import Polygon
 
 
-    def load_mask(self, image_id):
-        """Load instance masks for the given image.
+from taco_loader import *
 
-        Different datasets use different ways to store masks. This
-        function converts the different mask format to one format
-        in the form of a bitmap [height, width, instances].
+from random import seed
+from random import randint
+import skimage.io
+import skimage.transform
 
-        Returns:
-        masks: A bool array of shape [height, width, instance count] with
-            one mask per instance.
-        class_ids: a 1D array of class IDs of the instance masks.
-        """
 
-        image_info = self.image_info[image_id]
 
-        instance_masks = []
-        class_ids = []
-        annotations = self.image_info[image_id]["annotations"]
-        # Build mask of shape [height, width, instance_count] and list
-        # of class IDs that correspond to each channel of the mask.
-        for annotation in annotations:
-            class_id = self.map_source_class_id("taco.{}".format(annotation['category_id']))
-            if class_id:
-                m = utils.annToMask(annotation, image_info["height"],image_info["width"])
-                # Some objects are so small that they're less than 1 pixel area
-                # and end up rounded out. Skip those objects.
-                if m.max() < 1:
-                    continue
-                # Is it a crowd? If so, use a negative class ID.
-                if annotation['iscrowd']:
-                    # Use negative class ID for crowds
-                    class_id *= -1
-                    # For crowd masks, annToMask() sometimes returns a mask
-                    # smaller than the given dimensions. If so, resize it.
-                    if m.shape[0] != image_info["height"] or m.shape[1] != image_info["width"]:
-                        m = np.ones([image_info["height"], image_info["width"]], dtype=bool)
-                instance_masks.append(m)
-                class_ids.append(class_id)
+def load_modified_images():
+    # Load class map - these tables map the original TACO classes to your desired class system
+    # and allow you to discard classes that you don't want to include.
+    class_map = {}
+    with open("./data/all_image_urls.csv") as csvfile:
+        reader = csv.reader(csvfile)
+        class_map = {row[0]:row[1] for row in reader}
 
-        # Pack instance masks into an array
-        if class_ids:
-            mask = np.stack(instance_masks, axis=2).astype(np.bool)
-            class_ids = np.array(class_ids, dtype=np.int32)
-            return mask, class_ids
-        else:
-            # Call super class to return an empty mask
-            return super(Taco, self).load_mask(image_id)
+    # Load full dataset or a subset
+    TACO_DIR = "../data"
+    round = None # Split number: If None, loads full dataset else if int > 0 selects split no 
+    subset = "train" # Used only when round !=None, Options: ('train','val','test') to select respective subset
+    dataset = dataset.Taco()
+    taco = dataset.load_taco(TACO_DIR, round, subset, class_map=class_map, return_taco=True)
 
-    def replace_dataset_classes(self, dataset, class_map):
-        """ Replaces classes of dataset based on a dictionary"""
-        class_new_names = list(set(class_map.values()))
-        class_new_names.sort()
-        class_originals = copy.deepcopy(dataset['categories'])
-        dataset['categories'] = []
-        class_ids_map = {}  # map from old id to new id
+    # Must call before using the dataset
+    dataset.prepare()
 
-        # Assign background id 0
-        has_background = False
-        if 'Background' in class_new_names:
-            if class_new_names.index('Background') != 0:
-                class_new_names.remove('Background')
-                class_new_names.insert(0, 'Background')
-            has_background = True
+    print("Class Count: {}".format(dataset.num_classes))
+    for i, info in enumerate(dataset.class_info):
+        print("{:3}. {:50}".format(i, info['name']))
 
-        # Replace categories
-        for id_new, class_new_name in enumerate(class_new_names):
+    bbox_widths = []
+    bbox_heights = []
+    obj_areas_sqrt = []
+    obj_areas_sqrt_fraction = []
+    bbox_aspect_ratio = []
+    max_image_dim = 1024
 
-            # Make sure id:0 is reserved for background
-            id_rectified = id_new
-            if not has_background:
-                id_rectified += 1
+    for ann in taco.dataset['annotations']:
+    
+        imgs = taco.loadImgs(ann['image_id'])
+        
+        resize_scale = max_image_dim/max(imgs[0]['width'], imgs[0]['height'])
+        # Uncomment this to work on original image size
+        #     resize_scale = 1
+        
+        bbox_widths.append(ann['bbox'][2]*resize_scale)
+        bbox_heights.append(ann['bbox'][3]*resize_scale)
+        obj_area = ann['bbox'][2]*ann['bbox'][3]*resize_scale**2 # ann['area']
+        obj_areas_sqrt.append(np.sqrt(obj_area))
+            
+        img_area = imgs[0]['width']*imgs[0]['height']*resize_scale**2
+        obj_areas_sqrt_fraction.append(np.sqrt(obj_area/img_area))
 
-            category = {
-                'supercategory': '',
-                'id': id_rectified,  # Background has id=0
-                'name': class_new_name,
-            }
-            dataset['categories'].append(category)
-            # Map class names
-            for class_original in class_originals:
-                if class_map[class_original['name']] == class_new_name:
-                    class_ids_map[class_original['id']] = id_rectified
+    print('According to MS COCO Evaluation. This dataset has:')
+    print(np.sum(np.array(obj_areas_sqrt)<32), 'small objects (area<32*32 px)')
+    print(np.sum(np.array(obj_areas_sqrt)<64), 'medium objects (area<96*96 px)')
+    print(np.sum(np.array(obj_areas_sqrt)<96), 'large objects (area>96*96 px)')
 
-        # Update annotations category id tag
-        for ann in dataset['annotations']:
-            ann['category_id'] = class_ids_map[ann['category_id']]
+    trash_images = []
+
+    for index, image in enumerate(dataset.image_ids):
+        # Load random image
+        image_id = index
+        image_ori = dataset.load_image(image_id)
+        masks_ori, _ = dataset.load_mask(image_id)
+
+        image_dtype = image_ori.dtype
+        nr_annotations = np.shape(masks_ori)[-1]
+
+        bboxes = utils.extract_bboxes(masks_ori)
+
+        for bbox_id in range(len(bboxes)):
+    
+            image = image_ori
+            masks = masks_ori
+            
+            bboxes_cpy = bboxes
+            y1, x1, y2, x2 = bboxes_cpy[bbox_id]
+            h, w = image.shape[:2]
+            
+            bbox_width = x2-x1
+            bbox_height = y2-y1
+            
+            img_max_dim = max(h,w)
+            bbox_max_dim = max(bbox_width,bbox_height)
+            
+            print('Image original shape:',image.shape)
+            print('Bbox original shape:',y1, x1, y2, x2)
+            
+            bbox_max_dim_threshold_4_scaling = config.IMAGE_MAX_DIM*0.8
+
+
+         #If bbox is big enough or too big, downsize full image
+        if bbox_max_dim > bbox_max_dim_threshold_4_scaling:
+            
+            # Rescale
+            downscale_at_least = min(1.,config.IMAGE_MAX_DIM/bbox_max_dim)
+            downscale_min = config.IMAGE_MAX_DIM/img_max_dim
+            
+            scale = random.random()*(downscale_at_least-downscale_min)+downscale_min
+            
+            print('Downscaling image by',scale)
+            print("Scale interval:", downscale_min, downscale_at_least)
+            
+            # Actually scale Image   
+            image = skimage.transform.resize(image, (np.round(h * scale), np.round(w * scale)),order=1,
+                                            mode="constant", preserve_range=True)
+        
+            h, w = image.shape[:2]
+            img_max_dim = max(h,w)
+        
+            # Padding
+            top_pad = (img_max_dim - h) // 2
+            bottom_pad = img_max_dim - h - top_pad
+            left_pad = (img_max_dim - w) // 2
+            right_pad = img_max_dim - w - left_pad
+            padding = [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
+            image = np.pad(image, padding, mode='constant', constant_values=0).astype(image_dtype)
+            window = (top_pad, left_pad, h + top_pad, w + left_pad)
+            
+            # Adjust mask and other vars
+            masks = utils.resize_mask(masks, scale, padding)
+            bboxes_cpy = utils.extract_bboxes(masks)
+            y1, x1, y2, x2 = bboxes_cpy[bbox_id]
+            h, w = image.shape[:2]
+            
+            print('Image resized shape:',image.shape)
+        
+        # Select crop around target annotation
+        x0_min = max(x2-config.IMAGE_MAX_DIM,0) 
+        x0_max = min(x1,w-config.IMAGE_MAX_DIM)
+        x0 = randint(x0_min, x0_max)
+        y0_min = max(y2-config.IMAGE_MAX_DIM,0) 
+        y0_max = min(y1,h-config.IMAGE_MAX_DIM)
+        y0 = randint(y0_min, y0_max)
+        
+        if padding:
+            max_dim = config.IMAGE_MAX_DIM
+            window = (max(top_pad,y0)-y0, max(left_pad,x0)-x0, min(window[2],y0+max_dim)-y0, min(window[3],x0+max_dim)-x0)
+            print(window)
+        
+        # Crop
+        crop = (y0, x0, config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM)
+        image = image[y0:y0 + config.IMAGE_MAX_DIM, x0:x0 + config.IMAGE_MAX_DIM]
+        masks = masks[y0:y0 + config.IMAGE_MAX_DIM, x0:x0 + config.IMAGE_MAX_DIM]
+        ax[i+1].imshow(image)
+        ax[i+1].axis('off')
+        i+=1
+
+
+        trash_images.append(image)
+
+    return trash_images
+
+
+#test data loader
+
+def main():
+
+    trash_images = load_modified_images()
+    print(trash_images)
+
+
+if __name__ == "__main__":
+    main()

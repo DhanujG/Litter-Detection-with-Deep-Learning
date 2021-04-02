@@ -81,10 +81,10 @@ def load_modified_images():
         # Load random image
         image_id = index
         image_ori = dataset.load_image(image_id)
-        masks_ori, _ = dataset.load_mask(image_id)
+        #masks_ori, _ = dataset.load_mask(image_id)
 
         image_dtype = image_ori.dtype
-        nr_annotations = np.shape(masks_ori)[-1]
+        #nr_annotations = np.shape(masks_ori)[-1]
 
         bboxes = utils.extract_bboxes(masks_ori)
 
@@ -138,9 +138,9 @@ def load_modified_images():
             window = (top_pad, left_pad, h + top_pad, w + left_pad)
             
             # Adjust mask and other vars
-            masks = utils.resize_mask(masks, scale, padding)
-            bboxes_cpy = utils.extract_bboxes(masks)
-            y1, x1, y2, x2 = bboxes_cpy[bbox_id]
+            #masks = utils.resize_mask(masks, scale, padding)
+            #bboxes_cpy = utils.extract_bboxes(masks)
+            y1, x1, y2, x2 = bboxes[bbox_id]
             h, w = image.shape[:2]
             
             print('Image resized shape:',image.shape)

@@ -13,6 +13,8 @@ import re
 import collections
 from torch._six import string_classes
 
+import torchvision.models as models
+
 
 def get_info(filename):
     cut_filename = filename[:-4]
@@ -24,8 +26,8 @@ def get_info(filename):
 class TrashModel(LightningModule):
     def __init__(self):
         super().__init__()
-        self.feat_extractor = None # TODO: use pretrained imagenet
-        self.l1 = torch.nn.Linear(100, 1)
+        self.feat_extractor = models.alexnet(pretrained=True)
+        self.l1 = torch.nn.Linear(1000, 1)
         self.lossfn = F.mse_loss
 
     def forward(self, x):
@@ -33,7 +35,7 @@ class TrashModel(LightningModule):
 
     def training_step(self, batch, batch_idx):
         image, has_trash, env_list = batch
-        trash = 1 if (has_trash ) else 0
+        trash = has_trash.float()
         pred = self(image)
         loss = self.lossfn(pred, trash)
         tensorboard_logs = {'train_loss': loss}
@@ -41,7 +43,7 @@ class TrashModel(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         image, has_trash, env_list = batch
-        trash = 1 if (has_trash ) else 0
+        trash = has_trash.float()
         pred = self(image)
         loss = self.lossfn(pred, trash)
         return {'val_loss': self.lossfn(pred, has_trash)}

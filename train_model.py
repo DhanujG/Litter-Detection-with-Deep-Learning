@@ -1,21 +1,22 @@
 import os
 
 import torch
+from torchvision.transforms import ToTensor
 from torch.nn import functional as F
-from torch.utils.data import DataLoader
-import torchaudio
+from torch.utils.data import Dataset, DataLoader
 from pytorch_lightning.core.lightning import LightningModule
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from PIL import Image
+import numpy as np
 
-from taco_loader import *
-from data_loader import *
 
-
-def random_crop(input):
-    # TODO: randomly crop the image
-    return input, has_trash
-
+def get_info(filename):
+    cut_filename = filename[:-4]
+    l = cut_filename.split("_")
+    id, crop, trash, env = l
+    env_list = [int(x) for x in env]
+    return int(id), int(crop), trash == "1", env_list
 
 class TrashModel(LightningModule):
 
@@ -29,18 +30,18 @@ class TrashModel(LightningModule):
         return torch.relu(self.l1(x))
 
     def training_step(self, batch, batch_idx):
-        image, _, _ = batch
-        cropped_image, has_trash = random_crop(image)
-        pred = self(cropped_image)
-        loss = self.lossfn(pred, has_trash)
+        image, has_trash, env_list = batch
+        trash = if has_trash 1 else 0
+        pred = self(image)
+        loss = self.lossfn(pred, trash)
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
 
     def validation_step(self, batch, batch_idx):
-        image, _, _ = batch
-        cropped_image, has_trash = random_crop(image)
-        pred = self(cropped_image)
-        loss = self.lossfn(pred, has_trash)
+        image, has_trash, env_list = batch
+        trash = if has_trash 1 else 0
+        pred = self(image)
+        loss = self.lossfn(pred, trash)
         return {'val_loss': self.lossfn(pred, has_trash)}
 
     def validation_epoch_end(self, outputs):
@@ -53,10 +54,32 @@ class TrashModel(LightningModule):
 
 
 
-trash_data = None # TODO: add dataset
+class CroppedTrashDataset(Dataset):
+    def __init__(self, metafile, folder):
+        self.folder = folder
+        self.file_list = []
+        with open(metafile) as mf:
+            for filename in mf.read().splitlines():
+                self.file_list.append(filename)
 
-train_dataloader = DataLoader(trash_data, batch_size=32, num_workers=4, shuffle=True)
-val_dataloader = DataLoader(trash_data, batch_size=32, num_workers=4)
+    def __len__(self):
+        return len(file_list)
+
+    def __getitem__(self, idx):
+        filename = self.file_list[idx]
+        id, crop, trash, env_list = get_info(filename)
+        img = Image.open(os.path.join(self.folder, filename)) # PIL Image
+        img_tensor = ToTensor()(img)
+        return img_tensor, trash, env_list
+
+
+
+
+
+trash_data = CroppedTrashDataset("./new_data.txt", "./new_data")
+
+train_dataloader = DataLoader(trash_data, batch_size=32, shuffle=True)
+val_dataloader = DataLoader(trash_data, batch_size=32)
 
 
 model = TrashModel()

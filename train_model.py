@@ -31,22 +31,23 @@ class TrashModel(LightningModule):
         self.lossfn = F.mse_loss
 
     def forward(self, x):
-        return torch.relu(self.l1(x))
+        return torch.relu(self.l1(torch.relu(self.feat_extractor(x))))
 
     def training_step(self, batch, batch_idx):
         image, has_trash, env_list = batch
-        trash = has_trash.float()
+        trash = has_trash.float().unsqueeze(1)
         pred = self(image)
+        # print(pred.shape, trash.shape)
         loss = self.lossfn(pred, trash)
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
 
     def validation_step(self, batch, batch_idx):
         image, has_trash, env_list = batch
-        trash = has_trash.float()
+        trash = has_trash.float().unsqueeze(1)
         pred = self(image)
         loss = self.lossfn(pred, trash)
-        return {'val_loss': self.lossfn(pred, has_trash)}
+        return {'val_loss': loss}
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
@@ -136,8 +137,8 @@ trash_data = CroppedTrashDataset("./new_data.txt", "./new_data/")
 
 
 
-train_dataloader = DataLoader(trash_data, batch_size=32, shuffle=True, collate_fn = mod_collate)
-val_dataloader = DataLoader(trash_data, batch_size=32, collate_fn = mod_collate)
+train_dataloader = DataLoader(trash_data, batch_size=32, num_workers=2, shuffle=True, collate_fn = mod_collate)
+val_dataloader = DataLoader(trash_data, batch_size=32, num_workers=2, collate_fn = mod_collate)
 
 
 
@@ -150,7 +151,7 @@ model = TrashModel()
 
 
 early_stop_callback = EarlyStopping(
-   monitor='val_loss',
+   monitor='train_loss',
    min_delta=0.00,
    patience=5,
    verbose=True,

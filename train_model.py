@@ -12,8 +12,10 @@ import numpy as np
 import re
 import collections
 from torch._six import string_classes
-
+from sklearn import metrics
 import torchvision.models as models
+
+
 
 
 def get_info(filename):
@@ -29,6 +31,8 @@ class TrashModel(LightningModule):
         self.feat_extractor = models.alexnet(pretrained=True)
         self.l1 = torch.nn.Linear(1000, 1)
         self.lossfn = F.mse_loss
+        self.test_size = 0
+        self.test_sum = 0
 
     def forward(self, x):
         return torch.relu(self.l1(torch.relu(self.feat_extractor(x))))
@@ -41,6 +45,21 @@ class TrashModel(LightningModule):
         loss = self.lossfn(pred, trash)
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
+
+    def test_step(self, batch, batch_idx):
+        image, has_trash, env_list = batch
+        trash = has_trash.float().unsqueeze(1)
+        pred = self(image)
+        loss = self.lossfn(pred, trash)
+        #accuracy = metrics.accuracy_score(trash, pred)
+        #t = Variable(torch.Tensor([0.5]))
+        out = (pred > 0.5).float()
+        accuracy = (torch.sum(out == trash))/ (len(trash)*1.0)
+        self.test_size =+1
+        self.test_sum = accuracy + self.test_sum
+        tensorboard_logs = {'test_loss': loss, 'test_accuracy': accuracy}
+        return {'loss': loss, 'accuracy': accuracy, 'log': tensorboard_logs}
+
 
     def validation_step(self, batch, batch_idx):
         image, has_trash, env_list = batch
@@ -137,8 +156,8 @@ trash_data = CroppedTrashDataset("./new_data.txt", "./new_data/")
 
 
 
-train_dataloader = DataLoader(trash_data, batch_size=32, num_workers=2, shuffle=True, collate_fn = mod_collate)
-val_dataloader = DataLoader(trash_data, batch_size=32, num_workers=2, collate_fn = mod_collate)
+train_dataloader = DataLoader(trash_data, batch_size=32, shuffle=True, collate_fn = mod_collate)
+val_dataloader = DataLoader(trash_data, batch_size=32, collate_fn = mod_collate)
 
 
 
@@ -162,10 +181,12 @@ early_stop_callback = EarlyStopping(
 
 
 #trainer = Trainer(show_progress_bar=True, early_stop_callback=early_stop_callback)
-trainer = Trainer(logger=True, callbacks=[early_stop_callback])
-trainer.fit(model, train_dataloader, val_dataloader)
+trainer = Trainer(logger=True, gpus=1, callbacks=[early_stop_callback])
+#trainer.fit(model, train_dataloader, val_dataloader)
 
 
-
+#test the model
+trainer.test(model = model, test_dataloaders = val_dataloader, ckpt_path = "./lightning_logs/version_6/checkpoints/epoch=11-step=491.ckpt")
+print(model.test_sum/ model.test_size)
 
 

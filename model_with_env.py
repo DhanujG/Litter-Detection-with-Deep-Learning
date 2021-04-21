@@ -58,7 +58,7 @@ class TrashModel(LightningModule):
         out_env = (pred_env > 0.5).float()
 
         accuracy_class = (torch.sum(out_class == trash)) / (len(trash)*1.0)
-        accuracy_env = torch.sum(torch.all(out_env == env_list, dim=1)) / (len(trash)*1.0)
+        accuracy_env = torch.sum(out_env == env_list, dim=0) / (len(trash)*1.0)
 
         # self.test_size += 1
         # self.test_sum = accuracy + self.test_sum

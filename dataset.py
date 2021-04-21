@@ -22,6 +22,18 @@ import torchvision.models as models
 
 
 class CroppedTrashDataset(Dataset):
+    def get_info(self, filename):
+        cut_filename = filename[:-4]
+        l = cut_filename.split("_")
+        id, crop, trash, env = l
+        env_list = [int(x) for x in env]
+        env_tensor = [0] * 7
+        for i in range(7):
+            if i+1 in env_list:
+                env_tensor[i] = 1
+        env_tensor = torch.tensor(env_tensor).float()
+        return int(id), int(crop), trash == "1", env_tensor
+
     def __init__(self, metafile, folder):
         self.folder = folder
         self.file_list = []
@@ -34,7 +46,7 @@ class CroppedTrashDataset(Dataset):
 
     def __getitem__(self, idx):
         filename = self.file_list[idx]
-        id, crop, trash, env_list = get_info(filename)
+        id, crop, trash, env_list = self.get_info(filename)
         #print(os.path.join(self.folder, filename))
         img = Image.open(os.path.join(self.folder, filename)) # PIL Image
         img_tensor = ToTensor()(img)

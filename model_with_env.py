@@ -48,7 +48,7 @@ class TrashModel(LightningModule):
         trash = has_trash.float().unsqueeze(1)
         pred = self(image)
         label = torch.cat((trash, env_list), dim=1)
-        loss = self.lossfn(pred, trash)
+        loss = self.lossfn(pred, label)
 
         # split pred into classification part
         # and env prediction part
@@ -63,7 +63,9 @@ class TrashModel(LightningModule):
         # self.test_size += 1
         # self.test_sum = accuracy + self.test_sum
 
-        tensorboard_logs = {'test_loss': loss, 'test_accuracy_class': accuracy_class, 'test_accuracy_env': accuracy_env}
+        #tensorboard_logs = {'test_loss': loss, 'test_accuracy_class': accuracy_class, 'test_accuracy_env': accuracy_env}
+        tensorboard_logs = {'test_loss': loss, 'test_accuracy_class': accuracy_class, 'Acc_Pave' : accuracy_env[1], 'Acc_SandPebs' : accuracy_env[2], 'Acc_Veg' : accuracy_env[4], 'Acc_Water' : accuracy_env[5]}
+
         return {'loss': loss, 'accuracy_class': accuracy_class, 'accuracy_env': accuracy_env, 'log': tensorboard_logs}
 
 
@@ -98,7 +100,7 @@ trash_data = CroppedTrashDataset("./new_data.txt", "./new_data/")
 
 
 train_dataloader = DataLoader(trash_data, batch_size=32, shuffle=True, collate_fn = mod_collate)
-val_dataloader = DataLoader(trash_data, batch_size=32, collate_fn = mod_collate)
+val_dataloader = DataLoader(trash_data, batch_size=100, collate_fn = mod_collate)
 
 
 
@@ -122,14 +124,14 @@ early_stop_callback = EarlyStopping(
 
 #TRAIN MODEL
 #trainer = Trainer(show_progress_bar=True, early_stop_callback=early_stop_callback)
-trainer = Trainer(logger=True, gpus=0, callbacks=[early_stop_callback])
-trainer.fit(model, train_dataloader, val_dataloader)
+trainer = Trainer(logger=True, gpus=1, callbacks=[early_stop_callback])
+#trainer.fit(model, train_dataloader, val_dataloader)
 
 
 
-#TEST MODEL
+#TEST MODELS
 #test the model
-# trainer.test(model = model, test_dataloaders = val_dataloader, ckpt_path = "./lightning_logs/version_6/checkpoints/epoch=11-step=491.ckpt")
+trainer.test(model = model, test_dataloaders = val_dataloader, ckpt_path = "./lightning_logs/version_7/checkpoints/epoch=6-step=216.ckpt")
 # print(model.test_sum/ model.test_size)
 
 

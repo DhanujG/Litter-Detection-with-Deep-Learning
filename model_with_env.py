@@ -40,7 +40,7 @@ class TrashModel(LightningModule):
         pred_class, pred_env = torch.split(pred, [1, 7], dim=1)
         pred_env = torch.argmax(pred_env, dim=1)
 
-        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), 1)
+        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda"))
 
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
@@ -52,7 +52,7 @@ class TrashModel(LightningModule):
         pred_class, pred_env = torch.split(pred, [1, 7], dim=1)
         pred_env = torch.argmax(pred_env, dim=1)
 
-        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), 1)
+        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda"))
 
         # split pred into classification part
         # and env prediction part
@@ -81,12 +81,14 @@ class TrashModel(LightningModule):
         #print(pred_env)
         pred_env = torch.argmax(pred_env, dim=1)
 
-        print(type(pred_env))
+        #print(type(pred_env))
 
-        loss_trash = self.lossfn(pred_class, trash)
-        loss_env = self.lossfn((pred_env == env), torch.ones(len(pred_env)))
+        #loss_trash = self.lossfn(pred_class, trash)
+        #loss_env = self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda"))
+        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda"))
 
-        return {'val_loss': loss_trash, 'env_val_loss': loss_env}
+        return {'val_loss': loss}
+        #return {'val_loss': loss_trash, 'env_val_loss': loss_env}
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()

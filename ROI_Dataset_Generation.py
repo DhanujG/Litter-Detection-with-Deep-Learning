@@ -77,7 +77,7 @@ def export_modified_json_dataset(json_file, output_json = "", export_json = Fals
 
     
 
-    scene_background_ids = [{"id": 0, "name": "Clean"}, {"id": 1, "name": "Indoor, Man-made"}, {"id": 2, "name": "Pavement"}, {"id": 3, "name": "Sand, Dirt, Pebbles"}, {"id": 4, "name": "Trash"}, {"id": 5, "name": "Vegetation"}, {"id": 6, "name": "Water"}]
+    #scene_background_ids = [{"id": 0, "name": "Clean"}, {"id": 1, "name": "Indoor, Man-made"}, {"id": 2, "name": "Pavement"}, {"id": 3, "name": "Sand, Dirt, Pebbles"}, {"id": 4, "name": "Trash"}, {"id": 5, "name": "Vegetation"}, {"id": 6, "name": "Water"}]
 
 
     
@@ -105,7 +105,7 @@ def create_custom_boxes(trash_image_annot, output_json = "", export_json = False
         #obtain original dimensions
         width = element['og_width']
         height = element['og_height']
-        environment_ids = element['scene_id']
+        #environment_ids = element['scene_id']
 
         #      "bbox": [x,y,width,height]
         #add bbox images to data for positive trash
@@ -122,13 +122,15 @@ def create_custom_boxes(trash_image_annot, output_json = "", export_json = False
             
             
             #make ROI boxes square if they are not already
-            if (widthb < heightb):
-                if ((x + widthb + (heightb - widthb)) < width):
-                    widthb = heightb
+            #if (widthb < heightb):
+                #if (x + heightb) < width:
+                    #print(element['image_id'])
+                    #widthb = heightb
 
-            if (widthb > heightb):
-                if ((y + heightb + (widthb -heightb )) < height):
-                    heightb = widthb
+            #elif (widthb > heightb):
+                #if (y + widthb) < height:
+                    #print(element['image_id'])
+                    #heightb = widthb
 
 
             overlaps = False
@@ -145,6 +147,7 @@ def create_custom_boxes(trash_image_annot, output_json = "", export_json = False
                 #check if box dimensions are extending outside of the image
                 if ((x + temp + widthb) > width)   or ((y + temp + heightb) > height) :
                     overlaps = True
+                    #print(element['image_id'])
                     break
 
                 #check if it overlaps with the other boundry boxes
@@ -347,7 +350,7 @@ def export_roi_dataset(final_dataset, trash_annotations, output_folder):
 
 
         
-        width, height = pil_image.size
+        #width, height = pil_image.size
 
         #print(pil_image.size)
         #print(x1, y2, x2, y1)
@@ -355,7 +358,7 @@ def export_roi_dataset(final_dataset, trash_annotations, output_folder):
         
         new_im = pil_image.crop((x1, y1, x2, y2))
 
-        #new_im = new_im.resize((1000,1000))
+        new_im = new_im.resize((1000,1000))
 
         images_pil.append(new_im)
 

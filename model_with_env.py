@@ -132,13 +132,13 @@ early_stop_callback = EarlyStopping(
 #TRAIN MODEL
 #trainer = Trainer(show_progress_bar=True, early_stop_callback=early_stop_callback)
 trainer = Trainer(logger=True, gpus=1, callbacks=[early_stop_callback])
-trainer.fit(model, train_dataloader, val_dataloader)
+#trainer.fit(model, train_dataloader, val_dataloader)
 
 
 
 #TEST MODELS
 #test the model
-#trainer.test(model = model, test_dataloaders = val_dataloader, ckpt_path = "./lightning_logs/version_7/checkpoints/epoch=6-step=216.ckpt")
+trainer.test(model = model, test_dataloaders = val_dataloader, ckpt_path = "./lightning_logs/version_46/checkpoints/epoch=10-step=340.ckpt")
 # print(model.test_sum/ model.test_size)
 
 

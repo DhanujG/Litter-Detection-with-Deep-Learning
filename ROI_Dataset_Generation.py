@@ -16,6 +16,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
+import cv2
+import numpy as np
 
 # Ignore warnings
 import warnings
@@ -30,6 +32,8 @@ def export_modified_json_dataset(json_file, output_json = "", export_json = Fals
     #total_images = 1499
     total_images = num_files
 
+    #print(len(annot['scene_annotations']))
+    #print(len(annot["annotations"]))
 
     #print(annotations_json.keys())
     #print(len(annot['scene_annotations']))
@@ -44,36 +48,44 @@ def export_modified_json_dataset(json_file, output_json = "", export_json = Fals
 
         temp = {'image_id': 0,  'image_url': '', 'filename': '', 'og_width': 0, 'og_height': 0, 'scene_id': [], 'bboxes':[]}
 
+        temp_env_list = []
         
         #test if there is only one environmental id
-        for test in (elementb for elementb in annot['scene_annotations'] if elementb["image_id"] == cur_id):
-            settemp= set(test["background_ids"])
-            trial = list(settemp)
+        for entry in annot['scene_annotations'] :
 
-            
-            if len(trial) == 1 and trial[0] != 1:
-                temp['image_id'] = cur_id
-                temp['scene_id'] = trial
+            #choose only the first scene annotation for each image (usually this represents the trash object area and not the rest of the image)
+            if entry['image_id'] == cur_id:
+
+                settemp= set(entry["background_ids"])
+                trial = list(settemp)
+                temp_env_list.extend(trial)
+                break
+
+        #print(cur_id)
+        #print(temp_env_list)
+            #if entry["image_id"] == cur_id:
+                #settemp= set(entry["background_ids"])
+                #trial = list(settemp)
+
+        if len(temp_env_list) == 1 and temp_env_list[0] != 1 and temp_env_list[0] != 4 and temp_env_list[0] != 7 and temp_env_list[0] != 0:
+            temp['image_id'] = cur_id
+            #print(cur_id)
+            temp['scene_id'] = trial
+            #print(trial)
 
 
-                for element1 in (elementb for elementb in annot["images"] if elementb["id"] == cur_id):
+            for element1 in (elementb for elementb in annot["images"] if elementb["id"] == cur_id):
 
-                    temp['image_url'] = element1["flickr_url"]
-                    temp['filename'] = element1['file_name']
-                    temp['og_width'] = element1['width']
-                    temp['og_height'] = element1['height']
-                
-                for element2 in annot["annotations"]:
-
-                    if element2["image_id"] == cur_id:
-                        temp['bboxes'].append(element2["bbox"])
-
-                
+                temp['image_url'] = element1["flickr_url"]
+                temp['filename'] = element1['file_name']
+                temp['og_width'] = element1['width']
+                temp['og_height'] = element1['height']
                     
+            for element2 in annot["annotations"]:
+                if element2["image_id"] == cur_id:
+                    temp['bboxes'].append(element2["bbox"])
 
-        
-                #print(temp)
-                custom_dataset.append(temp)
+            custom_dataset.append(temp)
 
     
 
@@ -86,7 +98,7 @@ def export_modified_json_dataset(json_file, output_json = "", export_json = Fals
 
 
     if (export_json == True):
-        print("outputting...")
+        print("outputting.... into: " + output_json)
         fout = open(output_json,"w")
         fout.write(simplejson.dumps(custom_dataset_json, indent = 4, sort_keys = True))
         fout.close()
@@ -122,15 +134,15 @@ def create_custom_boxes(trash_image_annot, output_json = "", export_json = False
             
             
             #make ROI boxes square if they are not already
-            #if (widthb < heightb):
-                #if (x + heightb) < width:
+            if (widthb < heightb):
+                if (x + heightb) < width:
                     #print(element['image_id'])
-                    #widthb = heightb
+                    widthb = heightb
 
-            #elif (widthb > heightb):
-                #if (y + widthb) < height:
+            elif (widthb > heightb):
+                if (y + widthb) < height:
                     #print(element['image_id'])
-                    #heightb = widthb
+                    heightb = widthb
 
 
             overlaps = False
@@ -188,6 +200,7 @@ def create_custom_boxes(trash_image_annot, output_json = "", export_json = False
                     dimension_increaser = temp
             
             final_dataset['boundry_box'].append([x, y, (widthb + dimension_increaser), (heightb + dimension_increaser)])
+            #final_dataset['boundry_box'].append([x, y, (widthb ), (heightb )])
             #print([x, y, (widthb + dimension_increaser*2), (heightb + dimension_increaser*2)])
 
             final_dataset['image_ids'].append(element["image_id"])
@@ -202,7 +215,7 @@ def create_custom_boxes(trash_image_annot, output_json = "", export_json = False
         
 
         #set a goal non trash image box size of 1/4 minimum of height/width
-        goal_height_width = math.floor(min(width, height) / 4)
+        goal_height_width = math.floor(min(width, height) / 3)
         
         #our goal is to find one boundry ROI box with no trash for every ROI Box with trash we have.
         for box in element['bboxes']:
@@ -235,8 +248,8 @@ def create_custom_boxes(trash_image_annot, output_json = "", export_json = False
                 #print(fail_rate)
 
                 #obtain our dimensions of our randomized ROI box without trash
-                adj_x = random.randint(0, (width - goal_height_width - 1))
-                adj_y = random.randint(0, (height - goal_height_width - 1))
+                adj_x = random.randint(0, int(width - goal_height_width - 1))
+                adj_y = random.randint(0, int(height - goal_height_width - 1))
                 adj_x1 = adj_x 
                 adj_x2 = adj_x + goal_height_width
                 adj_y1 = adj_y 
@@ -366,7 +379,38 @@ def export_roi_dataset(final_dataset, trash_annotations, output_folder):
 
         environments = "".join(environments)
 
-        new_im.save(output_folder + str(i) + "_" + str(image_id) + "_" + str(final_dataset['trash'][i]) + "_" + environments + ".png")
+
+
+        #check for black boxes!
+
+        #covert from pil to numpy for cv2
+
+
+        open_cv_image = numpy.array(new_im) 
+            # Convert RGB to BGR 
+        img = open_cv_image[:, :, ::-1].copy() 
+
+        #test for black boxes
+        gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+        _,thresh = cv2.threshold(gray,1,255,cv2.THRESH_BINARY)
+
+        contours,hierarchy = cv2.findContours(thresh,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
+
+        if len(contours) > 0:
+            cnt = contours[0]
+            x,y,w,h = cv2.boundingRect(cnt)
+
+            if x + w < 990 or h + y < 990:
+                #print("Black Box detected for: " + str(i) + "_" + str(image_id) + "_" + str(final_dataset['trash'][i]) + "_" + environments + ".png")
+                new_im.save("./error_roi_data/automated_error_detection/" + str(i) + "_" + str(image_id) + "_" + str(final_dataset['trash'][i]) + "_" + environments + ".png")
+            else:
+                new_im.save(output_folder + str(i) + "_" + str(image_id) + "_" + str(final_dataset['trash'][i]) + "_" + environments + ".png")
+
+
+
+
+
+        #new_im.save(output_folder + str(i) + "_" + str(image_id) + "_" + str(final_dataset['trash'][i]) + "_" + environments + ".png")
 
     
     #arr_reshaped = images_np(arr.shape[0], -1)
@@ -377,7 +421,14 @@ def export_roi_dataset(final_dataset, trash_annotations, output_folder):
 
 
 
+    with open("new_data.txt", "w") as a:
+        for path, subdirs, files in os.walk(output_folder):
+            for filename in files:
+                #f = os.path.join(path, filename)
+                a.write(str(filename) + "\n") 
     # return image_ids, image_data, trash_labels, environment_labels
+
+
     return final_dataset["image_ids"], images_pil, final_dataset["trash"], final_dataset["environment"]
 
 

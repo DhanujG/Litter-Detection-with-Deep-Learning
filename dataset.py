@@ -26,7 +26,7 @@ class CroppedTrashDataset(Dataset):
         cut_filename = filename[:-4]
         l = cut_filename.split("_")
         id, crop, trash, env = l
-        return int(id), int(crop), trash == "1", int(env-1)
+        return int(id), int(crop), trash == "1", int(env)-1
 
     def __init__(self, metafile, folder):
         self.folder = folder

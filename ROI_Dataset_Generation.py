@@ -44,29 +44,36 @@ def export_modified_json_dataset(json_file, output_json = "", export_json = Fals
 
         temp = {'image_id': 0,  'image_url': '', 'filename': '', 'og_width': 0, 'og_height': 0, 'scene_id': [], 'bboxes':[]}
 
-        temp['image_id'] = cur_id
-
-        for element1 in (elementb for elementb in annot["images"] if elementb["id"] == cur_id):
-
-            temp['image_url'] = element1["flickr_url"]
-            temp['filename'] = element1['file_name']
-            temp['og_width'] = element1['width']
-            temp['og_height'] = element1['height']
         
-        for element2 in annot["annotations"]:
+        #test if there is only one environmental id
+        for test in (elementb for elementb in annot['scene_annotations'] if elementb["image_id"] == cur_id):
+            settemp= set(test["background_ids"])
+            trial = list(settemp)
 
-            if element2["image_id"] == cur_id:
-                temp['bboxes'].append(element2["bbox"])
-
-        for element3 in (elementb for elementb in annot['scene_annotations'] if elementb["image_id"] == cur_id):
-
-             settemp= set(element3["background_ids"])
-             temp['scene_id'] = list(settemp)
             
+            if len(trial) == 1 and trial[0] != 1:
+                temp['image_id'] = cur_id
+                temp['scene_id'] = trial
+
+
+                for element1 in (elementb for elementb in annot["images"] if elementb["id"] == cur_id):
+
+                    temp['image_url'] = element1["flickr_url"]
+                    temp['filename'] = element1['file_name']
+                    temp['og_width'] = element1['width']
+                    temp['og_height'] = element1['height']
+                
+                for element2 in annot["annotations"]:
+
+                    if element2["image_id"] == cur_id:
+                        temp['bboxes'].append(element2["bbox"])
+
+                
+                    
 
         
-        #print(temp)
-        custom_dataset.append(temp)
+                #print(temp)
+                custom_dataset.append(temp)
 
     
 
@@ -104,6 +111,7 @@ def create_custom_boxes(trash_image_annot, output_json = "", export_json = False
         #add bbox images to data for positive trash
         for box in element['bboxes']:
 
+            #obtain x,y,width and height for the boundry box of plastic object
             x = math.floor(box[0])
             y = math.floor(box[1])
             widthb = box[2]
@@ -113,62 +121,70 @@ def create_custom_boxes(trash_image_annot, output_json = "", export_json = False
 
             
             
-            #make ROI boxes square
+            #make ROI boxes square if they are not already
             if (widthb < heightb):
-                if (((x + math.ceil(widthb / 2) + (heightb - widthb)) < width)) and (((x - math.ceil(widthb / 2) - (heightb - widthb)) > 0)):
+                if ((x + widthb + (heightb - widthb)) < width):
                     widthb = heightb
 
             if (widthb > heightb):
-                if (((y + math.ceil(heightb / 2) + (widthb -heightb )) < height)) and (((y - math.ceil(heightb / 2) - (widthb - heightb)) > 0)):
+                if ((y + heightb + (widthb -heightb )) < height):
                     heightb = widthb
 
 
             overlaps = False
 
+            #create measure to increase width, height on both sides
             dimension_increaser = 0
 
+            #while the boxes don't overlap with other trash boundry boxes, increase their dimensions by 1
             while(overlaps == False):
                 
                 temp = dimension_increaser + 1
 
                 
-
-                if (x + temp + math.ceil(widthb / 2)) > width or (x - temp - math.ceil(widthb / 2)) < 0 or (y - temp - math.ceil(heightb / 2)) < 0 or (y + temp + math.ceil(heightb / 2)) > height:
+                #check if box dimensions are extending outside of the image
+                if ((x + temp + widthb) > width)   or ((y + temp + heightb) > height) :
                     overlaps = True
                     break
 
+                #check if it overlaps with the other boundry boxes
                 for new_box in element['bboxes']:
                     new_x = new_box[0]
                     new_y = new_box[1]
                     new_widthb = new_box[2]
                     new_heightb = new_box[3]
 
-                    new_x1 = new_box[0] - math.ceil(new_box[2]/2)
-                    new_x2 = new_box[0] + math.ceil(new_box[2]/2)
-                    new_y1 = new_box[1] - math.ceil(new_box[3]/2)
-                    new_y2 = new_box[1] + math.ceil(new_box[3]/2)
+                    new_x1 = new_box[0] 
+                    new_x2 = new_box[0] + new_widthb
+                    new_y1 = new_box[1] 
+                    new_y2 = new_box[1] + new_heightb
 
-                    adj_x2 = (x + temp + math.ceil(widthb / 2))
-                    adj_x1 = (x - temp - math.ceil(widthb / 2))
-                    adj_y1 = (y - temp - math.ceil(heightb / 2))
-                    adj_y2 = (y + temp + math.ceil(heightb / 2))
+                    #create dimensions of our adjusted hypothetical trash_box
+                    adj_x2 = (x + temp + widthb)
+                    adj_x1 = x
+                    adj_y1 = y
+                    adj_y2 = (y + temp + heightb)
 
+                    #make sure that the new trash box is not the old trash box
                     if (new_x != x) and (new_y != y):
 
+                        #if two of the corners overlap, then it overlaps
                         if ((new_x1 < adj_x1 < new_x2) or (new_x1 < adj_x2 < new_x2)) and ((new_y1 < adj_y1 < new_y2) or (new_y1 < adj_y2 < new_y2)):
 
                             overlaps = True
                             break
 
-                        if ((adj_x2 - adj_x1) * (adj_y2 - adj_y1)) > ((width*height)/3):
+                        #if it is larger than 1/9 the original picture
+                        if ((adj_x2 - adj_x1) * (adj_y2 - adj_y1)) > ((width*height)/9):
                             overlaps = True
                             break
                 
                 if overlaps == False:
 
+                    #set the dimension increaser if it does not overlap
                     dimension_increaser = temp
             
-            final_dataset['boundry_box'].append([x, y, (widthb + dimension_increaser*2), (heightb + dimension_increaser*2)])
+            final_dataset['boundry_box'].append([x, y, (widthb + dimension_increaser), (heightb + dimension_increaser)])
             #print([x, y, (widthb + dimension_increaser*2), (heightb + dimension_increaser*2)])
 
             final_dataset['image_ids'].append(element["image_id"])
@@ -182,58 +198,76 @@ def create_custom_boxes(trash_image_annot, output_json = "", export_json = False
 
         
 
-        
+        #set a goal non trash image box size of 1/4 minimum of height/width
         goal_height_width = math.floor(min(width, height) / 4)
         
+        #our goal is to find one boundry ROI box with no trash for every ROI Box with trash we have.
         for box in element['bboxes']:
 
+
+            #count the number of random centers that were not within trash boundry boxes
             counter = 0
+            #count the number of actually created non trash boxes per trash_boundry box tested
             num_pushed = 0
+
+            #count the amount of times we tried to find a natural box with no trash
             fail_rate = 0
+
+            #obtain trash boundry box dimensions
             box_x = math.floor(box[0])
             box_y = math.floor(box[1])
             widthb = box[2]
             heightb = box[3]
-            x1 = box_x - math.floor((box[2])/2)
-            x2 = box_x + math.floor((box[2])/2)
-            y1 = box_y - math.floor(heightb/2)
-            y2 = box_y + math.floor(heightb/2)
+            x1 = box_x 
+            x2 = box_x + widthb
+            y1 = box_y 
+            y2 = box_y + heightb
 
 
             #print(element['image_id'])
+            #set our conditions to stop trying to find a ROI box without trash
             while (counter != 500 and num_pushed != 1 and fail_rate != 1000):
                 
                 fail_rate = fail_rate + 1
                 #print(fail_rate)
-                adj_x = random.randint(0, goal_height_width)
-                adj_y = random.randint(0, goal_height_width)
-                adj_x1 = adj_x - math.floor(goal_height_width/2)
-                adj_x2 = adj_x + math.floor(goal_height_width/2)
-                adj_y1 = adj_y - math.floor(goal_height_width/2)
-                adj_y2 = adj_y + math.floor(goal_height_width/2)
 
-                if not(((x1 < adj_x1 < x2) or (x1 < adj_x2 < x2)) and ((y1 < adj_y1 < y2) or (y1 < adj_y2 < y2))):
+                #obtain our dimensions of our randomized ROI box without trash
+                adj_x = random.randint(0, (width - goal_height_width - 1))
+                adj_y = random.randint(0, (height - goal_height_width - 1))
+                adj_x1 = adj_x 
+                adj_x2 = adj_x + goal_height_width
+                adj_y1 = adj_y 
+                adj_y2 = adj_y + goal_height_width
+
+                if ((adj_x2 > width) or  (adj_y2 > height)):
+                    continue
+
+
+                #make sure the non-trash ROI box and the original trash ROI Box don't intersect at all
+                if not (((x1 < adj_x1 < x2) or (x1 < adj_x2 < x2)) and ((y1 < adj_y1 < y2) or (y1 < adj_y2 < y2))) and not (((adj_x1 < x1 < adj_x2) or (adj_x1 < x2 < adj_x2)) and ((adj_y1 < y1 < adj_y2) or (adj_y1 < y2 < adj_y2))):
 
                     
                     counter = counter + 1
 
                     success = True
-
+                    #check if the non-trash roi box intersects with any of the other trash boxes in the image
                     for obox in element['bboxes']:
                         
                         obox_x = math.floor(obox[0])
                         obox_y = math.floor(obox[1])
                         owidthb = box[2]
                         oheightb = box[3]
-                        ox1 = obox_x - math.floor((obox[2])/2)
-                        ox2 = obox_x + math.floor((obox[2])/2)
-                        oy1 = obox_y - math.floor(oheightb/2)
-                        oy2 = obox_y + math.floor(oheightb/2)
+                        ox1 = obox_x 
+                        ox2 = obox_x + owidthb
+                        oy1 = obox_y 
+                        oy2 = obox_y + oheightb
 
                         if (obox_x)!= box_x and (obox_y!= box_y):
-                            if (((ox1 < adj_x1 < ox2) or (ox1 < adj_x2 < ox2)) and ((oy1 < adj_y1 < oy2) or (oy1 < adj_y2 < oy2))):
+                            #mark success as false if they intersect at all
+                            if (((ox1 < adj_x1 < ox2) or (ox1 < adj_x2 < ox2)) and ((oy1 < adj_y1 < oy2) or (oy1 < adj_y2 < oy2))) or (((adj_x1 < ox1 < adj_x2) or (adj_x1 < ox2 < adj_x2)) and ((adj_y1 < oy1 < adj_y2) or (adj_y1 < oy2 < adj_y2))):
                                 success = False
 
+                    #if no intersections at all, then we can add the image to our dataset
                     if success == True:
                         num_pushed = num_pushed + 1
 
@@ -264,18 +298,28 @@ def export_roi_dataset(final_dataset, trash_annotations, output_folder):
 
     for i in range(0, len(final_dataset['image_ids'])) :
 
+        #obtain image id from final_dataset
         image_id = final_dataset['image_ids'][i] 
 
-        filenamey = trash_annotations[ image_id ]['filename']
+
+        #use image id to obtain filename from trash_annotations
+
+        filenamey = ''
+
+        for element in trash_annotations:
+            if element['image_id'] == image_id:
+                filenamey = element['filename']
+
+        
 
         pil_image = Image.open ("./image_data/" +  filenamey)
 
         #full_image = numpy.array (  pil_image  )
 
-        x1 = final_dataset['boundry_box'][i][0] - math.floor(final_dataset['boundry_box'][i][2]/2)
-        x2 = final_dataset['boundry_box'][i][0] + math.floor(final_dataset['boundry_box'][i][2]/2)
-        y1 = final_dataset['boundry_box'][i][1] - math.floor(final_dataset['boundry_box'][i][3]/2)
-        y2 = final_dataset['boundry_box'][i][1] + math.floor(final_dataset['boundry_box'][i][3]/2)
+        x1 = final_dataset['boundry_box'][i][0] 
+        x2 = final_dataset['boundry_box'][i][0] + final_dataset['boundry_box'][i][2]
+        y1 = final_dataset['boundry_box'][i][1] 
+        y2 = final_dataset['boundry_box'][i][1] + final_dataset['boundry_box'][i][3]
 
 
 
@@ -308,11 +352,10 @@ def export_roi_dataset(final_dataset, trash_annotations, output_folder):
         #print(pil_image.size)
         #print(x1, y2, x2, y1)
 
-        #images_np.append(full_image[x1:x2, y1:y2, :])
+        
+        new_im = pil_image.crop((x1, y1, x2, y2))
 
-        new_im = pil_image.crop((x1, height - y2, x2, height - y1))
-
-        new_im = new_im.resize((1000,1000))
+        #new_im = new_im.resize((1000,1000))
 
         images_pil.append(new_im)
 

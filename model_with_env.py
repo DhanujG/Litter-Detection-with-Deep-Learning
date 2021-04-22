@@ -40,7 +40,7 @@ class TrashModel(LightningModule):
         pred_class, pred_env = torch.split(pred, [1, 7], dim=1)
         pred_env = torch.argmax(pred_env, dim=1)
 
-        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda"))
+        loss = self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda")) # + self.lossfn(pred_class, trash)
 
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
@@ -52,7 +52,7 @@ class TrashModel(LightningModule):
         pred_class, pred_env = torch.split(pred, [1, 7], dim=1)
         pred_env = torch.argmax(pred_env, dim=1)
 
-        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda"))
+        loss = self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda")) # + self.lossfn(pred_class, trash)
 
         # split pred into classification part
         # and env prediction part
@@ -85,7 +85,7 @@ class TrashModel(LightningModule):
 
         #loss_trash = self.lossfn(pred_class, trash)
         #loss_env = self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda"))
-        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda"))
+        loss = self.lossfn((pred_env == env), torch.ones(len(pred_env)).to(device="cuda")) # + self.lossfn(pred_class, trash)
 
         return {'val_loss': loss}
         #return {'val_loss': loss_trash, 'env_val_loss': loss_env}

@@ -81,16 +81,12 @@ class TrashModel(LightningModule):
         #print(pred_env)
         pred_env = torch.argmax(pred_env, dim=1)
 
-        #print(pred_env == env)
+        print(type(pred_env))
 
-        loss1 = self.lossfn(pred_class, trash)
+        loss_trash = self.lossfn(pred_class, trash)
+        loss_env = self.lossfn((pred_env == env), torch.ones(len(pred_env)))
 
-
-        loss2 = self.lossfn((pred_env == env), 1)
-
-        loss = loss1 + loss2
-
-        return {'val_loss': loss}
+        return {'val_loss': loss_trash, 'env_val_loss': loss_env}
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()

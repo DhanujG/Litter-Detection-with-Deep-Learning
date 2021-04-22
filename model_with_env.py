@@ -33,53 +33,53 @@ class TrashModel(LightningModule):
         return torch.sigmoid(self.l1(torch.relu(self.feat_extractor(x))))
 
     def training_step(self, batch, batch_idx):
-        image, has_trash, env_list = batch
+        image, has_trash, env = batch
         trash = has_trash.float().unsqueeze(1)
 
         pred = self(image)
-        label = torch.cat((trash, env_list), dim=1)
+        pred_class, pred_env = torch.split(pred, [1, 7], dim=1)
+        pred_env = torch.argmax(pred_env, dim=1)
 
-        loss = self.lossfn(pred, label)
+        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), 1)
+
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
 
     def test_step(self, batch, batch_idx):
-        image, has_trash, env_list = batch
+        image, has_trash, env = batch
         trash = has_trash.float().unsqueeze(1)
         pred = self(image)
-        label = torch.cat((trash, env_list), dim=1)
-        loss = self.lossfn(pred, label)
+        pred_class, pred_env = torch.split(pred, [1, 7], dim=1)
+        pred_env = torch.argmax(pred_env, dim=1)
+
+        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), 1)
 
         # split pred into classification part
         # and env prediction part
-        pred_class, pred_env = torch.split(pred, [1, 7], dim=1)
 
         out_class = (pred_class > 0.5).float()
-        out_env = (pred_env > 0.5).float()
 
         accuracy_class = (torch.sum(out_class == trash)) / (len(trash)*1.0)
-        accuracy_env = torch.sum(out_env == env_list, dim=0) / (len(trash)*1.0)
+        accuracy_env = torch.sum(pred_env == env, dim=0) / (len(trash)*1.0)
 
         # self.test_size += 1
         # self.test_sum = accuracy + self.test_sum
 
-        #tensorboard_logs = {'test_loss': loss, 'test_accuracy_class': accuracy_class, 'test_accuracy_env': accuracy_env}
-        tensorboard_logs = {'test_loss': loss, 'test_accuracy_class': accuracy_class, 'Acc_Pave' : accuracy_env[1], 'Acc_SandPebs' : accuracy_env[2], 'Acc_Veg' : accuracy_env[4], 'Acc_Water' : accuracy_env[5]}
+        tensorboard_logs = {'test_loss': loss, 'test_accuracy_class': accuracy_class, 'test_accuracy_env' : accuracy_env}
 
         return {'loss': loss, 'accuracy_class': accuracy_class, 'accuracy_env': accuracy_env, 'log': tensorboard_logs}
 
 
     def validation_step(self, batch, batch_idx):
-        image, has_trash, env_list = batch
+        image, has_trash, env = batch
         trash = has_trash.float().unsqueeze(1)
 
         # pred's 8 outputs are 1 classifier, and then 7 env vals
         pred = self(image)
+        pred_class, pred_env = torch.split(pred, [1, 7], dim=1)
+        pred_env = torch.argmax(pred_env, dim=1)
 
-        # label includes the 1 classifier, and then 7 env vals
-        label = torch.cat((trash, env_list), dim=1)
-
-        loss = self.lossfn(pred, label)
+        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), 1)
 
         return {'val_loss': loss}
 

@@ -26,13 +26,7 @@ class CroppedTrashDataset(Dataset):
         cut_filename = filename[:-4]
         l = cut_filename.split("_")
         id, crop, trash, env = l
-        env_list = [int(x) for x in env]
-        env_tensor = [0] * 7
-        for i in range(7):
-            if i+1 in env_list:
-                env_tensor[i] = 1
-        env_tensor = torch.tensor(env_tensor).float()
-        return int(id), int(crop), trash == "1", env_tensor
+        return int(id), int(crop), trash == "1", int(env-1)
 
     def __init__(self, metafile, folder):
         self.folder = folder

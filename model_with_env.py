@@ -77,9 +77,18 @@ class TrashModel(LightningModule):
         # pred's 8 outputs are 1 classifier, and then 7 env vals
         pred = self(image)
         pred_class, pred_env = torch.split(pred, [1, 7], dim=1)
+
+        #print(pred_env)
         pred_env = torch.argmax(pred_env, dim=1)
 
-        loss = self.lossfn(pred_class, trash) + self.lossfn((pred_env == env), 1)
+        #print(pred_env == env)
+
+        loss1 = self.lossfn(pred_class, trash)
+
+
+        loss2 = self.lossfn((pred_env == env), 1)
+
+        loss = loss1 + loss2
 
         return {'val_loss': loss}
 
@@ -100,7 +109,7 @@ trash_data = CroppedTrashDataset("./new_data.txt", "./new_data/")
 
 
 train_dataloader = DataLoader(trash_data, batch_size=32, shuffle=True, collate_fn = mod_collate)
-val_dataloader = DataLoader(trash_data, batch_size=100, collate_fn = mod_collate)
+val_dataloader = DataLoader(trash_data, batch_size=100, shuffle = True, collate_fn = mod_collate)
 
 
 
@@ -125,13 +134,13 @@ early_stop_callback = EarlyStopping(
 #TRAIN MODEL
 #trainer = Trainer(show_progress_bar=True, early_stop_callback=early_stop_callback)
 trainer = Trainer(logger=True, gpus=1, callbacks=[early_stop_callback])
-#trainer.fit(model, train_dataloader, val_dataloader)
+trainer.fit(model, train_dataloader, val_dataloader)
 
 
 
 #TEST MODELS
 #test the model
-trainer.test(model = model, test_dataloaders = val_dataloader, ckpt_path = "./lightning_logs/version_7/checkpoints/epoch=6-step=216.ckpt")
+#trainer.test(model = model, test_dataloaders = val_dataloader, ckpt_path = "./lightning_logs/version_7/checkpoints/epoch=6-step=216.ckpt")
 # print(model.test_sum/ model.test_size)
 
 
